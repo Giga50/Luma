@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Audio Aggregator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .player-card { background-color: #181818; width: 100%; max-width: 400px; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+        .info { text-align: center; margin-bottom: 20px; }
+        .title { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        audio { width: 100%; margin-bottom: 20px; filter: invert(0.9); }
+        .list-title { font-size: 1rem; color: #1db954; font-weight: bold; margin-bottom: 10px; }
+        .tracks-list { list-style: none; max-height: 250px; overflow-y: auto; }
+        .track-item { padding: 12px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; border-bottom: 1px solid #282828; }
+        .track-item:hover { background: #282828; }
+        .track-item.active { color: #1db954; font-weight: bold; background: #202020; }
+        .error-msg { color: #ff5b5b; text-align: center; font-size: 0.9rem; }
+    </style>
+    <!-- Подключаем бесплатный открытый скрипт для парсинга аудиолент без CORS блокировок -->
+    <script src="https://googleapis.com"></script>
+</head>
+<body>
+
+<div class="player-card">
+    <div class="info">
+        <div class="title" id="current-title">Сбор аудиофайлов...</div>
+    </div>
+    <audio id="audio" controls></audio>
+
+    <div class="list-title">Лента свежих треков из сети:</div>
+    <ul class="tracks-list" id="tracks-list"></ul>
+    <div id="error-box" class="error-msg"></div>
+</div>
+
+<script>
+    // Прямой открытый RSS-поток с аудиофайлами (подкасты, музыка)
+    // Можно заменить на любую другую работающую RSS аудио-ссылку
+    const AUDIO_FEED_URL = 'https://rss.com'; 
+
+    let tracks = [];
+    let currentIndex = 0;
+
+    const audio = document.getElementById('audio');
+    const titleEl = document.getElementById('current-title');
+    const listEl = document.getElementById('tracks-list');
+    const errorBox = document.getElementById('error-box');
+
+    function fetchMusic() {
+        // Используем бесплатный фид-парсер, убирающий ограничения чужих сайтов
+        feednami.load(AUDIO_FEED_URL, function(result) {
+            if (result.error) {
+                errorBox.textContent = "Ошибка сети: " + JSON.stringify(result.error);
+                titleEl.textContent = "Сбой загрузки";
+                return;
+            }
+
+            const entries = result.feed.entries;
+            
+            // Фильтруем и вытаскиваем только те элементы, внутри которых есть прямая ссылка на MP3 аудиофайл
+            tracks = entries.map(item => {
+                let mp3Url = '';
+                if (item.enclosures && item.enclosures.length > 0) {
+                    mp3Url = item.enclosures[0].url;
+                } else if (item.link) {
+                    mp3Url = item.link;
+                }
+                return {
+                    title: item.title,
+                    src: mp3Url
+                };
+            }).filter(track => track.src && track.src.includes('mp3'));
+
+            if (tracks.length > 0) {
+                renderList();
+                loadTrack(0);
+            } else {
+                titleEl.textContent = "Аудиофайлы не найдены";
+            }
+        });
+    }
+
+    function renderList() {
+        listEl.innerHTML = '';
+        tracks.forEach((track, index) => {
+            const li = document.createElement('li');
+            li.className = `track-item ${index === currentIndex ? 'active' : ''}`;
+            li.textContent = track.title;
+            li.onclick = () => playTrack(index);
+            listEl.appendChild(li);
+        });
+    }
+
+    function loadTrack(index) {
+        currentIndex = index;
+        const track = tracks[index];
+        audio.src = track.src;
+        titleEl.textContent = track.title;
+        
+        document.querySelectorAll('.track-item').forEach((item, i) => {
+            item.classList.toggle('active', i === index);
+        });
+    }
+
+    function playTrack(index) {
+        loadTrack(index);
+        audio.play();
+    }
+
+    audio.onended = () => {
+        let next = currentIndex + 1 < tracks.length ? currentIndex + 1 : 0;
+        playTrack(next);
+    };
+
+    // Запускаем автоматический сбор при старте
+    fetchMusic();
+</script>
+
+</body>
+</html>
