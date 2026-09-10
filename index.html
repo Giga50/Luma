@@ -3,17 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wikimedia Spotify Clone</title>
+    <title>Web Music Player</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
         .player-card { background-color: #181818; width: 100%; max-width: 400px; border-radius: 12px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid #282828; }
         .info { text-align: center; margin-bottom: 20px; }
-        .title { font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #1db954; }
+        .title { font-size: 1.3rem; font-weight: bold; margin-bottom: 5px; color: #1db954; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .genre { font-size: 0.9rem; color: #b3b3b3; margin-bottom: 15px; }
         audio { width: 100%; margin-bottom: 20px; filter: invert(0.9); }
         .list-title { font-size: 1rem; font-weight: bold; margin-bottom: 10px; color: #b3b3b3; }
-        .tracks-list { list-style: none; max-height: 250px; overflow-y: auto; }
-        .track-item { padding: 12px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; border-bottom: 1px solid #282828; }
+        .tracks-list { list-style: none; }
+        .track-item { padding: 12px 10px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; transition: 0.2s; border-bottom: 1px solid #282828; display: flex; justify-content: space-between; }
         .track-item:hover { background: #282828; }
         .track-item.active { color: #ffffff; font-weight: bold; background: #1db954; }
         .status-msg { color: #b3b3b3; text-align: center; font-size: 0.85rem; margin-top: 15px; }
@@ -23,64 +24,55 @@
 
 <div class="player-card">
     <div class="info">
-        <div class="title" id="current-title">Подключение к аудиобазе...</div>
+        <div class="title" id="current-title">Выберите поток</div>
+        <div class="genre" id="current-genre">Стриминг из интернета 24/7</div>
     </div>
     <audio id="audio" controls></audio>
 
-    <div class="list-title">Музыка из свободных архивов интернета:</div>
+    <div class="list-title">Доступные аудио-каналы:</div>
     <ul class="tracks-list" id="tracks-list"></ul>
-    <div id="status-box" class="status-msg">Статус: Загрузка...</div>
+    <div id="status-box" class="status-msg">Статус: Готов к работе</div>
 </div>
 
 <script>
-    // Официальный открытый запрос к Википедии на поиск аудиофайлов (.mp3)
-    const API_URL = 'https://wikimedia.org*';
+    // Постоянные, вечные музыкальные трансляции из интернета, открытые для всех сайтов
+    const stations = [
+        {
+            title: "Lofi Radio Beat",
+            genre: "Chill / Изучение / Расслабление",
+            src: "https://streamafrica.net"
+        },
+        {
+            title: "Synthwave Zone",
+            genre: "Retro / Ретрофутуризм / Драйв",
+            src: "https://nightride.fm"
+        },
+        {
+            title: "Chillout Lounge",
+            genre: "Ambient / Глубокий звук",
+            src: "https://unitedradio.it"
+        },
+        {
+            title: "Classic Masterpieces",
+            genre: "Классическая музыка / Оркестр",
+            src: "https://radiojar.com"
+        }
+    ];
 
-    let tracks = [];
     let currentIndex = 0;
 
     const audio = document.getElementById('audio');
     const titleEl = document.getElementById('current-title');
+    const genreEl = document.getElementById('current-genre');
     const listEl = document.getElementById('tracks-list');
     const statusBox = document.getElementById('status-box');
 
-    async function fetchMusic() {
-        try {
-            statusBox.textContent = "Статус: Сканируем открытые аудиосервера...";
-            const response = await fetch(API_URL);
-            const data = await response.json();
-
-            if (data.query && data.query.allimages) {
-                // Пересобираем аудиозаписи в понятные для плеера треки
-                tracks = data.query.allimages.map(file => {
-                    // Очищаем красивое название файла от лишнего мусора в строке
-                    let cleanTitle = file.title.replace('File:', '').replace('.mp3', '').substring(0, 40);
-                    return {
-                        title: cleanTitle || "Свободный трек",
-                        src: file.url // Прямая вечная ссылка на аудиопоток
-                    };
-                });
-
-                statusBox.textContent = `Статус: Музыка успешно получена!`;
-                renderList();
-                loadTrack(0);
-            } else {
-                throw new Error("База пуста");
-            }
-        } catch (error) {
-            titleEl.textContent = "Ошибка";
-            statusBox.style.color = "#ff5b5b";
-            statusBox.textContent = "Статус: Ошибка сети или соединения.";
-            console.error(error);
-        }
-    }
-
     function renderList() {
         listEl.innerHTML = '';
-        tracks.forEach((track, index) => {
+        stations.forEach((station, index) => {
             const li = document.createElement('li');
             li.className = `track-item ${index === currentIndex ? 'active' : ''}`;
-            li.textContent = `🎵 ${track.title}`;
+            li.innerHTML = `<span>📻 ${station.title}</span>`;
             li.onclick = () => playTrack(index);
             listEl.appendChild(li);
         });
@@ -88,9 +80,10 @@
 
     function loadTrack(index) {
         currentIndex = index;
-        const track = tracks[index];
-        audio.src = track.src;
-        titleEl.textContent = track.title;
+        const station = stations[index];
+        audio.src = station.src;
+        titleEl.textContent = station.title;
+        genreEl.textContent = station.genre;
         
         document.querySelectorAll('.track-item').forEach((item, i) => {
             item.classList.toggle('active', i === index);
@@ -99,18 +92,21 @@
 
     function playTrack(index) {
         loadTrack(index);
-        audio.play().catch(err => {
-            statusBox.textContent = "Формат не поддерживается, переключите трек.";
-        });
+        statusBox.textContent = "Статус: Буферизация потока...";
+        
+        audio.play()
+            .then(() => {
+                statusBox.textContent = "Статус: Воспроизведение онлайн";
+            })
+            .catch(err => {
+                statusBox.textContent = "Ошибка загрузки этого потока.";
+                console.log(err);
+            });
     }
 
-    audio.onended = () => {
-        let next = currentIndex + 1 < tracks.length ? currentIndex + 1 : 0;
-        playTrack(next);
-    };
-
-    // Запуск автоматического поиска музыки в сети
-    fetchMusic();
+    // Первичный запуск интерфейса
+    renderList();
+    loadTrack(0);
 </script>
 
 </body>
