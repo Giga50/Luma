@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Radio Aggregator</title>
+    <title>Wikimedia Spotify Clone</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
@@ -13,7 +13,7 @@
         audio { width: 100%; margin-bottom: 20px; filter: invert(0.9); }
         .list-title { font-size: 1rem; font-weight: bold; margin-bottom: 10px; color: #b3b3b3; }
         .tracks-list { list-style: none; max-height: 250px; overflow-y: auto; }
-        .track-item { padding: 12px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; border-bottom: 1px solid #282828; display: flex; justify-content: space-between; }
+        .track-item { padding: 12px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; transition: 0.2s; border-bottom: 1px solid #282828; }
         .track-item:hover { background: #282828; }
         .track-item.active { color: #ffffff; font-weight: bold; background: #1db954; }
         .status-msg { color: #b3b3b3; text-align: center; font-size: 0.85rem; margin-top: 15px; }
@@ -23,20 +23,20 @@
 
 <div class="player-card">
     <div class="info">
-        <div class="title" id="current-title">Загрузка радиостанций...</div>
+        <div class="title" id="current-title">Подключение к аудиобазе...</div>
     </div>
     <audio id="audio" controls></audio>
 
-    <div class="list-title">Мировые музыкальные потоки:</div>
+    <div class="list-title">Музыка из свободных архивов интернета:</div>
     <ul class="tracks-list" id="tracks-list"></ul>
-    <div id="status-box" class="status-msg">Статус: Подключение...</div>
+    <div id="status-box" class="status-msg">Статус: Загрузка...</div>
 </div>
 
 <script>
-    // Самый стабильный открытый сервер для получения музыки
-    const API_URL = 'https://radio-browser.info';
+    // Официальный открытый запрос к Википедии на поиск аудиофайлов (.mp3)
+    const API_URL = 'https://wikimedia.org*';
 
-    let stations = [];
+    let tracks = [];
     let currentIndex = 0;
 
     const audio = document.getElementById('audio');
@@ -44,43 +44,43 @@
     const listEl = document.getElementById('tracks-list');
     const statusBox = document.getElementById('status-box');
 
-    async function fetchRadio() {
+    async function fetchMusic() {
         try {
-            statusBox.textContent = "Статус: Получение списка потоков...";
+            statusBox.textContent = "Статус: Сканируем открытые аудиосервера...";
             const response = await fetch(API_URL);
-            
-            if (!response.ok) throw new Error("Ошибка сервера");
-            
             const data = await response.json();
 
-            // Фильтруем только рабочие ссылки
-            stations = data.map(item => ({
-                title: item.name.trim() || "Без названия",
-                src: item.url_resolved,
-                country: item.countrycode || "WW"
-            })).filter(station => station.src.startsWith('http'));
+            if (data.query && data.query.allimages) {
+                // Пересобираем аудиозаписи в понятные для плеера треки
+                tracks = data.query.allimages.map(file => {
+                    // Очищаем красивое название файла от лишнего мусора в строке
+                    let cleanTitle = file.title.replace('File:', '').replace('.mp3', '').substring(0, 40);
+                    return {
+                        title: cleanTitle || "Свободный трек",
+                        src: file.url // Прямая вечная ссылка на аудиопоток
+                    };
+                });
 
-            if (stations.length > 0) {
-                statusBox.textContent = `Статус: Готово! Найдено станций: ${stations.length}`;
+                statusBox.textContent = `Статус: Музыка успешно получена!`;
                 renderList();
                 loadTrack(0);
             } else {
-                throw new Error("Список пуст");
+                throw new Error("База пуста");
             }
         } catch (error) {
-            titleEl.textContent = "Ошибка сети";
+            titleEl.textContent = "Ошибка";
             statusBox.style.color = "#ff5b5b";
-            statusBox.textContent = "Статус: Блокировка CORS или нет интернета.";
+            statusBox.textContent = "Статус: Ошибка сети или соединения.";
             console.error(error);
         }
     }
 
     function renderList() {
         listEl.innerHTML = '';
-        stations.forEach((station, index) => {
+        tracks.forEach((track, index) => {
             const li = document.createElement('li');
             li.className = `track-item ${index === currentIndex ? 'active' : ''}`;
-            li.innerHTML = `<span>📻 ${station.title}</span> <span style="opacity: 0.6">[${station.country}]</span>`;
+            li.textContent = `🎵 ${track.title}`;
             li.onclick = () => playTrack(index);
             listEl.appendChild(li);
         });
@@ -88,9 +88,9 @@
 
     function loadTrack(index) {
         currentIndex = index;
-        const station = stations[index];
-        audio.src = station.src;
-        titleEl.textContent = station.title;
+        const track = tracks[index];
+        audio.src = track.src;
+        titleEl.textContent = track.title;
         
         document.querySelectorAll('.track-item').forEach((item, i) => {
             item.classList.toggle('active', i === index);
@@ -100,13 +100,17 @@
     function playTrack(index) {
         loadTrack(index);
         audio.play().catch(err => {
-            statusBox.textContent = "Статус: Ошибка потока, выберите другой.";
-            console.log("Ошибка воспроизведения:", err);
+            statusBox.textContent = "Формат не поддерживается, переключите трек.";
         });
     }
 
-    // Запуск агрегатора
-    fetchRadio();
+    audio.onended = () => {
+        let next = currentIndex + 1 < tracks.length ? currentIndex + 1 : 0;
+        playTrack(next);
+    };
+
+    // Запуск автоматического поиска музыки в сети
+    fetchMusic();
 </script>
 
 </body>
